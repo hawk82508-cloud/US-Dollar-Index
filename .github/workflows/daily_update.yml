@@ -1,0 +1,48 @@
+name: Daily DXY Auto Update
+
+on:
+  schedule:
+    # 美股週一至週五收盤後自動執行：UTC 21:30 (台灣時間週二至週六清晨 05:30，相容夏令與冬令時間)
+    - cron: '30 21 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-dxy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          pip install requests pandas numpy
+
+      - name: Run DXY Calculation & Page Builder
+        run: |
+          python update_dxy.py
+
+      - name: Send Daily Email Report to Subscribers
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+        run: |
+          python send_email_report.py
+
+      - name: Commit and Push Updated Data & HTML
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add raw_daily.csv raw_weekly.csv raw_monthly.csv index.html
+          git commit -m "Auto update DXY data: $(date '+%Y-%m-%d')" || exit 0
+          git pull --rebase origin main || true
+          git push origin main || true
